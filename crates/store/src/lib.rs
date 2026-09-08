@@ -22,8 +22,12 @@
 pub mod conformance;
 pub mod filesystem;
 pub mod memory;
+#[cfg(feature = "s3")]
+pub mod s3;
 mod store;
 
 pub use filesystem::FilesystemStore;
 pub use memory::MemoryStore;
+#[cfg(feature = "s3")]
+pub use s3::{S3Config, S3Store};
 pub use store::{trust_for_producer, Entry, ObjectStore, StoreError, StoreResult};

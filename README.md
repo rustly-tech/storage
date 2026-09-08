@@ -9,11 +9,12 @@ multiple sources.
 ## Packages
 
 - `rustly-cas` defines content IDs, chunked manifests, and provenance.
-- `rustly-store` provides in-memory and filesystem object stores.
+- `rustly-store` provides in-memory, filesystem, and optional S3-compatible
+  object stores.
 - `rustly-resolve` retrieves and verifies objects from available sources.
 
-The [design notes](docs/DESIGN.md) explain verification, distribution classes,
-and current implementation status.
+The [design notes](docs/DESIGN.md) explain verification and distribution
+classes. [S3 setup and qualification](docs/S3.md) covers remote storage.
 
 ## Verify
 

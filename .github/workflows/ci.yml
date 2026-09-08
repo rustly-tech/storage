@@ -68,3 +68,33 @@ jobs:
         run: |
           cargo test -p rustly-resolve --test resolution -- \
             --exact a_metered_source_is_skipped_when_spending_is_not_permitted --nocapture
+
+  remote-store:
+    name: S3-compatible store
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: remote-store
+      - name: Start a private MinIO test bucket
+        run: |
+          docker run --rm -d --name rustly-minio -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=rustly-test \
+            -e MINIO_ROOT_PASSWORD=rustly-test-secret-change-me \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for attempt in {1..30}; do
+            docker exec rustly-minio curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null && break
+            sleep 1
+          done
+          docker run --rm --network container:rustly-minio --entrypoint /bin/sh \
+            minio/mc:RELEASE.2025-04-16T18-13-26Z -c \
+            'mc alias set local http://127.0.0.1:9000 rustly-test rustly-test-secret-change-me >/dev/null && mc mb local/rustly-test >/dev/null'
+      - name: Run the remote-store contract and fault tests
+        run: cargo test -p rustly-store --features s3 --test s3_conformance -- --ignored --test-threads=1
+      - name: Stop MinIO
+        if: always()
+        run: docker stop rustly-minio || true

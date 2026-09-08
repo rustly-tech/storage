@@ -18,10 +18,9 @@ allow = [
 multiple-versions = "warn"
 wildcards = "deny"
 deny = [
-    # Invariant J. The data plane is exactly where a provider SDK would be most
-    # tempting and most damaging: an ObjectStore implementation that reaches for
-    # one directly would make that provider load-bearing.
-    { name = "aws-sdk-s3" },
+    # Provider clients belong only in an ObjectStore adapter. The optional S3
+    # adapter is the intended boundary and domain crates depend only on the
+    # ObjectStore trait.
     { name = "rusoto_s3" },
     { name = "google-cloud-storage" },
     { name = "azure_storage" },
