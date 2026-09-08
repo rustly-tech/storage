@@ -1,0 +1,33 @@
+# cargo-deny configuration. See rustly-tech/.github docs/DEPENDENCY_POLICY.md.
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0",
+    "Zlib", "CC0-1.0", "MPL-2.0", "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = [
+    # Invariant J. The data plane is exactly where a provider SDK would be most
+    # tempting and most damaging: an ObjectStore implementation that reaches for
+    # one directly would make that provider load-bearing.
+    { name = "aws-sdk-s3" },
+    { name = "rusoto_s3" },
+    { name = "google-cloud-storage" },
+    { name = "azure_storage" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

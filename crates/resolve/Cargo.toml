@@ -1,0 +1,21 @@
+[package]
+name = "rustly-resolve"
+description = "Multi-source object resolution for the Rustly data plane: local, peer, origin, rebuild."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+rustly-cas.workspace = true
+rustly-store.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

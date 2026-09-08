@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  schedule:
+    - cron: "51 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  rust:
+    uses: rustly-tech/.github/.github/workflows/rust-ci.yml@main
+    with:
+      msrv: "1.88.0"
+      features: "--all-features"
+
+  security:
+    uses: rustly-tech/.github/.github/workflows/rust-security.yml@main
+
+  integrity:
+    name: integrity corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: integrity
+
+      # The premise of this repository is that bytes are trustworthy because
+      # they are verified. These give that claim its own signal, rather than
+      # letting it hide inside an aggregate pass.
+      - name: Both store backends behave identically
+        run: cargo test -p rustly-store --test conformance -- --nocapture
+
+      - name: Corruption, truncation, and partial writes are detected
+        run: |
+          set -euo pipefail
+          for test in \
+            the_filesystem_store_detects_corruption_on_read_and_evicts_it \
+            the_memory_store_detects_corruption_on_read_too \
+            a_truncated_object_is_detected \
+            a_partial_write_never_becomes_a_readable_object; do
+            cargo test -p rustly-store --test conformance -- --exact "$test" --nocapture
+          done
+
+      - name: A lying peer cannot poison the cache
+        run: |
+          set -euo pipefail
+          for test in \
+            a_lying_peer_is_rejected_and_the_next_source_answers \
+            a_lying_peer_never_poisons_the_local_cache \
+            every_response_is_verified_against_the_requested_cid_not_just_any_cid; do
+            cargo test -p rustly-resolve --test resolution -- --exact "$test" --nocapture
+          done
+
+      - name: Degrading under quota pressure never spends
+        run: |
+          cargo test -p rustly-resolve --test resolution -- \
+            --exact a_metered_source_is_skipped_when_spending_is_not_permitted --nocapture
