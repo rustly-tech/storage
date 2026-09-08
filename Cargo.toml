@@ -8,7 +8,7 @@ edition = "2021"
 # MSRV is set by our dependency floor and enforced by CI.
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/rustly-tech/fabric"
+repository = "https://github.com/rustly-tech/storage"
 authors = ["Rustly contributors"]
 
 [workspace.dependencies]
