@@ -83,7 +83,10 @@ pub fn router(state: GatewayState) -> Router {
     Router::new()
         .route("/health", get(|| async { StatusCode::NO_CONTENT }))
         .route("/api/v1/uploads/{cid}", put(upload))
-        .route("/api/v1/artifacts/{cid}", get(read_artifact))
+        .route(
+            "/api/v1/artifacts/{cid}",
+            get(read_artifact).put(write_trusted_artifact),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -93,6 +96,61 @@ pub fn router(state: GatewayState) -> Router {
         .layer(RequestBodyLimitLayer::new(MAX_SOURCE_BYTES))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn write_trusted_artifact(
+    State(state): State<GatewayState>,
+    Path(cid_text): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<StatusCode, HttpError> {
+    require_trusted(&state, &headers)?;
+    let expected: Cid = cid_text.parse().map_err(|_| {
+        error(
+            StatusCode::BAD_REQUEST,
+            "invalid_cid",
+            "CID is not canonical BLAKE3",
+        )
+    })?;
+    if !expected.verifies(&body) {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "integrity_failure",
+            "artifact bytes do not match the requested CID",
+        ));
+    }
+    let stored = state
+        .store
+        .put(&body, Provenance::trusted_only())
+        .await
+        .map_err(|error_value| {
+            tracing::error!(%error_value, "trusted artifact write failed");
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "storage_unavailable",
+                "artifact storage is unavailable",
+            )
+        })?;
+    if stored != expected {
+        return Err(error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal",
+            "stored artifact identifier mismatch",
+        ));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn require_trusted(state: &GatewayState, headers: &HeaderMap) -> Result<(), HttpError> {
+    let provided = bearer(headers).unwrap_or_default().as_bytes();
+    if provided.ct_eq(&state.read_secret).unwrap_u8() != 1 {
+        return Err(error(
+            StatusCode::UNAUTHORIZED,
+            "unauthenticated",
+            "trusted artifact credential required",
+        ));
+    }
+    Ok(())
 }
 
 async fn upload(
@@ -183,14 +241,7 @@ async fn read_artifact(
     Path(cid_text): Path<String>,
     headers: HeaderMap,
 ) -> Result<Bytes, HttpError> {
-    let provided = bearer(&headers).unwrap_or_default().as_bytes();
-    if provided.ct_eq(&state.read_secret).unwrap_u8() != 1 {
-        return Err(error(
-            StatusCode::UNAUTHORIZED,
-            "unauthenticated",
-            "trusted artifact credential required",
-        ));
-    }
+    require_trusted(&state, &headers)?;
     let cid: Cid = cid_text.parse().map_err(|_| {
         error(
             StatusCode::BAD_REQUEST,
@@ -297,5 +348,45 @@ mod tests {
             app.oneshot(request).await.unwrap().status(),
             StatusCode::BAD_REQUEST
         );
+    }
+
+    #[tokio::test]
+    async fn trusted_writes_are_authenticated_and_content_verified() {
+        let (app, _, read_secret) = fixture();
+        let bytes = b"trusted evaluation package";
+        let cid = Cid::of(bytes).to_string();
+        let denied = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/v1/artifacts/{cid}"))
+            .body(Body::from(bytes.as_slice()))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(denied).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let write = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/v1/artifacts/{cid}"))
+            .header(
+                "authorization",
+                format!("Bearer {}", String::from_utf8(read_secret.clone()).unwrap()),
+            )
+            .body(Body::from(bytes.as_slice()))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(write).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let read = Request::builder()
+            .uri(format!("/api/v1/artifacts/{cid}"))
+            .header(
+                "authorization",
+                format!("Bearer {}", String::from_utf8(read_secret).unwrap()),
+            )
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(app.oneshot(read).await.unwrap().status(), StatusCode::OK);
     }
 }
