@@ -2,12 +2,11 @@
 
 use std::time::{Duration, Instant};
 
+use object_store::aws::{AmazonS3, AmazonS3Builder};
+use object_store::{path::Path, ObjectStoreExt};
 use rustly_cas::{Cid, Provenance};
 use rustly_store::conformance;
 use rustly_store::{ObjectStore, S3Config, S3Store, StoreError};
-use s3::bucket::Bucket;
-use s3::creds::Credentials;
-use s3::region::Region;
 
 fn setting(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.into())
@@ -27,25 +26,16 @@ fn configuration(max_object_bytes: usize) -> S3Config {
     }
 }
 
-fn raw_bucket(config: &S3Config) -> Bucket {
-    let credentials = Credentials::new(
-        Some(&config.access_key_id),
-        Some(&config.secret_access_key),
-        None,
-        None,
-        None,
-    )
-    .unwrap();
-    *Bucket::new(
-        &config.bucket,
-        Region::Custom {
-            region: config.region.clone(),
-            endpoint: config.endpoint.clone(),
-        },
-        credentials,
-    )
-    .unwrap()
-    .with_path_style()
+fn raw_bucket(config: &S3Config) -> AmazonS3 {
+    AmazonS3Builder::new()
+        .with_bucket_name(&config.bucket)
+        .with_region(&config.region)
+        .with_endpoint(&config.endpoint)
+        .with_access_key_id(&config.access_key_id)
+        .with_secret_access_key(&config.secret_access_key)
+        .with_allow_http(config.endpoint.starts_with("http://127.0.0.1"))
+        .build()
+        .unwrap()
 }
 
 fn object_key(config: &S3Config, cid: &Cid) -> String {
@@ -70,11 +60,13 @@ async fn s3_backend_satisfies_the_store_contract_and_detects_remote_corruption()
         .put(b"uncorrupted", Provenance::built_public())
         .await
         .unwrap();
-    let response = raw_bucket(&config)
-        .put_object(object_key(&config, &cid), b"tampered")
+    raw_bucket(&config)
+        .put(
+            &Path::from(object_key(&config, &cid)),
+            b"tampered".as_slice().into(),
+        )
         .await
         .unwrap();
-    assert!(response.status_code() < 300);
     assert!(matches!(
         store.get(&cid).await,
         Err(StoreError::Integrity { .. })

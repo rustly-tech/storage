@@ -1,6 +1,6 @@
 [package]
 name = "rustly-store"
-description = "ObjectStore abstraction for the Rustly data plane, with in-memory and filesystem backends."
+description = "Content-addressed object storage for Rustly."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,14 +10,14 @@ authors.workspace = true
 
 [features]
 default = []
-s3 = ["dep:s3"]
+s3 = ["dep:object_store"]
 
 [dependencies]
 async-trait.workspace = true
 rustly-cas.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-s3 = { workspace = true, optional = true }
+object_store = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
