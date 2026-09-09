@@ -1,0 +1,26 @@
+[package]
+name = "rustly-artifact-gateway"
+description = "Authenticated artifact uploads and trusted reads for Rustly."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+rustly-cas.workspace = true
+rustly-store = { workspace = true, features = ["s3"] }
+rustly-upload-protocol = { path = "../../crates/upload-protocol", version = "0.1.0" }
+serde.workspace = true
+subtle.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tower.workspace = true

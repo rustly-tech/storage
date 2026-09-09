@@ -12,6 +12,10 @@ multiple sources.
 - `rustly-store` provides in-memory, filesystem, and optional S3-compatible
   object stores.
 - `rustly-resolve` retrieves and verifies objects from available sources.
+- `rustly-upload-protocol` defines signed, short-lived upload grants and
+  verified receipts.
+- `rustly-artifact-gateway` accepts browser uploads without sending source
+  bytes through the main API and serves artifacts only to trusted workers.
 
 The [design notes](docs/DESIGN.md) explain verification and distribution
 classes. [S3 setup and qualification](docs/S3.md) covers remote storage.
