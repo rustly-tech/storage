@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
             access_key_id: required("RUSTLY_S3_ACCESS_KEY_ID")?,
             secret_access_key: required("RUSTLY_S3_SECRET_ACCESS_KEY")?,
             prefix: std::env::var("RUSTLY_S3_PREFIX").unwrap_or_else(|_| "rustly".into()),
-            max_object_bytes: rustly_artifact_gateway::MAX_SOURCE_BYTES,
+            max_object_bytes: rustly_artifact_gateway::MAX_ARTIFACT_BYTES,
             request_timeout: Duration::from_secs(15),
             max_attempts: 3,
         })?),

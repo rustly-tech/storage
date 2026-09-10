@@ -22,6 +22,8 @@ use tower_http::trace::TraceLayer;
 
 /// Maximum source file accepted by the public upload route.
 pub const MAX_SOURCE_BYTES: usize = 256 * 1024;
+/// Maximum trusted package, compiled module, or result manifest size.
+pub const MAX_ARTIFACT_BYTES: usize = 32 * 1024 * 1024;
 
 /// Gateway dependencies.
 #[derive(Clone)]
@@ -82,10 +84,15 @@ fn unix_now() -> i64 {
 pub fn router(state: GatewayState) -> Router {
     Router::new()
         .route("/health", get(|| async { StatusCode::NO_CONTENT }))
-        .route("/api/v1/uploads/{cid}", put(upload))
+        .route(
+            "/api/v1/uploads/{cid}",
+            put(upload).layer(RequestBodyLimitLayer::new(MAX_SOURCE_BYTES)),
+        )
         .route(
             "/api/v1/artifacts/{cid}",
-            get(read_artifact).put(write_trusted_artifact),
+            get(read_artifact)
+                .put(write_trusted_artifact)
+                .layer(RequestBodyLimitLayer::new(MAX_ARTIFACT_BYTES)),
         )
         .layer(
             CorsLayer::new()
@@ -93,7 +100,6 @@ pub fn router(state: GatewayState) -> Router {
                 .allow_methods([Method::PUT])
                 .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
         )
-        .layer(RequestBodyLimitLayer::new(MAX_SOURCE_BYTES))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -388,5 +394,43 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         assert_eq!(app.oneshot(read).await.unwrap().status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn source_and_trusted_artifact_routes_have_distinct_size_limits() {
+        let (app, tokens, read_secret) = fixture();
+        let bytes = vec![b'x'; MAX_SOURCE_BYTES + 1];
+        let cid = Cid::of(&bytes).to_string();
+        let grant = tokens.sign_grant(&UploadGrant {
+            user_id: "user-1".into(),
+            cid: cid.clone(),
+            size: bytes.len() as u64,
+            expires_at: unix_now() + 60,
+            nonce: "large".into(),
+        });
+        let source_write = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/v1/uploads/{cid}"))
+            .header("authorization", format!("Bearer {grant}"))
+            .body(Body::from(bytes.clone()))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(source_write).await.unwrap().status(),
+            StatusCode::PAYLOAD_TOO_LARGE
+        );
+
+        let artifact_write = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/v1/artifacts/{cid}"))
+            .header(
+                "authorization",
+                format!("Bearer {}", String::from_utf8(read_secret).unwrap()),
+            )
+            .body(Body::from(bytes))
+            .unwrap();
+        assert_eq!(
+            app.oneshot(artifact_write).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
     }
 }
