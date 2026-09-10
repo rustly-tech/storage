@@ -30,9 +30,9 @@ Large objects use fixed 1 MiB chunks. Chunk IDs allow partial verification,
 parallel retrieval, and deduplication. The resolver tries sources in order and
 checks every result before returning it.
 
-Peer transport, erasure coding, and an S3-compatible store are planned. The
-current implementation includes content IDs, manifests, provenance, in-memory
-and filesystem stores, and multi-source resolution. Unsupported redundancy
+The current implementation includes content IDs, manifests, provenance,
+in-memory, filesystem, and S3-compatible stores, plus multi-source resolution.
+Peer transport and erasure coding remain planned. Unsupported redundancy
 schemes are rejected rather than inferred.
 
 The store treats compiled artifacts, content packs, source archives, and
