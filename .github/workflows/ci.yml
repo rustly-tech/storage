@@ -113,6 +113,7 @@ jobs:
       - name: Smoke test the image
         run: |
           set -euo pipefail
+          trap 'docker rm -f artifact-gateway >/dev/null 2>&1 || true' EXIT
           docker run -d --name artifact-gateway -p 127.0.0.1:8081:8081 \
             -e RUSTLY_ARTIFACT_TOKEN_SECRET=ci-upload-secret-is-at-least-32-bytes \
             -e RUSTLY_ARTIFACT_READ_SECRET=ci-read-secret-is-at-least-32-bytes \
@@ -122,7 +123,7 @@ jobs:
             if curl -fsS http://127.0.0.1:8081/health >/dev/null; then break; fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:8081/health | grep -q '"status":"ok"'
+          [ "$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/health)" = 204 ]
           docker rm -f artifact-gateway
       - name: Log in to GHCR
         if: github.event_name == 'push'
